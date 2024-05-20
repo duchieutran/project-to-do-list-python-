@@ -6,17 +6,15 @@ import customtkinter
 from setting import *
 from PIL import Image
 from tkinter import ttk
-
-
 import mysql.connector
 
-# def check_login_status():
-#     # Kiểm tra trạng thái đăng nhập
-#     if os.environ.get("LOGGED_IN") != "true":
-#         mbox.showinfo("Thông báo", "Bạn chưa đăng nhập tài khoản!")
-#         sys.exit()
+def check_login_status():
+    # Kiểm tra trạng thái đăng nhập
+    if os.environ.get("LOGGED_IN") != "true":
+        mbox.showinfo("Thông báo", "Bạn chưa đăng nhập tài khoản!")
+        sys.exit()
 
-# check_login_status()
+check_login_status()
 
 with open("log.txt", "r") as f:
     username = f.read().strip()
@@ -36,24 +34,28 @@ try:
     cursor.execute("SELECT id, created_at, status, role FROM account WHERE account = %s", (username,))
     user_data = cursor.fetchone()
 
+    if user_data is None:
+        raise ValueError("Không tìm thấy người dùng")
+
+    id_name = user_data[0]
+    date_create = user_data[1]
+    status = user_data[2]
+    role = user_data[3]
+
     # Đóng kết nối cơ sở dữ liệu
+    cursor.close()
     conn.close()
 
-except mysql.connector.Error as err:
+except (mysql.connector.Error, ValueError) as err:
     mbox.showerror("Lỗi", f"Không thể kết nối tới cơ sở dữ liệu: {err}")
     sys.exit()
 
-id_name = user_data[0]
-date_create = user_data[1]
-status = user_data[2]
-role = user_data[3]
-
-app = CTk()
+app = customtkinter.CTk()
 app.geometry(geometry_main)
 app.title("Trang Chủ")
 
 # Hiển thị thông tin người dùng trong tab hồ sơ
-info_username = CTkLabel(master=app, text=f"Xin chào, {username}", font=("Arial", 14))
+info_username = customtkinter.CTkLabel(master=app, text=f"Xin chào, {username}", font=("Arial", 14))
 info_username.place(relx=0.95, rely=0.05, anchor="ne")
 
 tab_menu = customtkinter.CTkTabview(app, width=1200, height=680)
@@ -104,9 +106,8 @@ else:
                                       text="Vai trò: Người dùng", font=("Arial", 16), text_color="blue")
 info_role.pack(padx=20, pady=3)
 
-button_frame = CTkFrame(master=tab_menu.tab("     Hồ sơ     "))
+button_frame = customtkinter.CTkFrame(master=tab_menu.tab("     Hồ sơ     "))
 button_frame.pack(padx=20, pady=10)
-
 
 if role == "admin":
     admin_button = customtkinter.CTkButton(master=button_frame, text="Trang Admin")
@@ -132,6 +133,7 @@ def delete_account():
             conn.commit()
 
             # Đóng kết nối cơ sở dữ liệu
+            cursor.close()
             conn.close()
 
             mbox.showinfo("Thông báo", "Xóa tài khoản thành công!")
@@ -164,32 +166,30 @@ def toggle_appearance_mode():
 toggle_button = customtkinter.CTkButton(master=app, text="Sáng", command=toggle_appearance_mode)
 toggle_button.place(relx=0.05, rely=0.05)
 
-
 # --------------------- Tạo công việc ---------------------
-# trong danh sách công việc , tôi muốn tạo 1 from để nhập công việc mới, sau đó lưu vào cơ sỏ dữ liệu với bảng tast_list gồm các thông tin là: task_title, task_content, task_date, task_time, task_status
 def save_task():
     title = task_title_entry.get()
     content = task_content_entry.get()
-    start_date = task_start_date_entry.get()  # Change variable name to start_date
-    end_date = task_end_date_entry.get()  # Add end_date variable
+    start_date = task_start_date_entry.get()
+    end_date = task_end_date_entry.get()
 
     try:
         # Kết nối tới cơ sở dữ liệu MySQL
         conn = mysql.connector.connect(
             host="localhost",
-            user="root",  # Thay thế bằng tên đăng nhập MySQL của bạn
-            password="",  # Thay thế bằng mật khẩu MySQL của bạn
+            user="root",
+            password="",
             database="to_do_list"
         )
 
         cursor = conn.cursor()
 
         # Thêm công việc vào bảng task_list
-        cursor.execute("INSERT INTO task_list (task_title, task_content,creator_name, start_time, end_time) VALUES (%s, %s, %s, %s, %s)",
-                       (title, content, username, start_date, end_date))
+        cursor.execute("INSERT INTO task_list (task_title, task_content, creator_name, start_time, end_time, task_status) VALUES (%s, %s, %s, %s, %s, %s)",
+                       (title, content, username, start_date, end_date, 'pending'))
         conn.commit()
 
-        # Đóng kết nối cơ sở dữ liệu
+        cursor.close()
         conn.close()
 
         mbox.showinfo("Thông báo", "Thêm công việc thành công!")
@@ -197,49 +197,85 @@ def save_task():
         # Clear the input fields
         task_title_entry.delete(0, "end")
         task_content_entry.delete(0, "end")
-        task_start_date_entry.delete(0, "end")  # Change variable name to task_start_date_entry
-        task_end_date_entry.delete(0, "end")  # Add task_end_date_entry
+        task_start_date_entry.delete(0, "end")
+        task_end_date_entry.delete(0, "end")
 
     except mysql.connector.Error as err:
         mbox.showerror("Lỗi", f"Lỗi khi thêm công việc: {err}")
 
-# Tạo form để nhập công việc mới
-task_form_frame = CTkFrame(master=tab_menu.tab("     Thêm công việc     "))
+task_form_frame = customtkinter.CTkFrame(master=tab_menu.tab("     Thêm công việc     "))
 task_form_frame.pack(padx=20, pady=20)
 
 task_title_label = customtkinter.CTkLabel(master=task_form_frame, text="Tiêu đề công việc:")
 task_title_label.pack()
 
-task_title_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)  # Increase the width of the entry
+task_title_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)
 task_title_entry.pack(pady=5)
 
 task_content_label = customtkinter.CTkLabel(master=task_form_frame, text="Nội dung công việc:")
 task_content_label.pack()
 
-task_content_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)  # Increase the width of the entry
+task_content_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)
 task_content_entry.pack(pady=5)
 
-task_start_date_label = customtkinter.CTkLabel(master=task_form_frame, text="Ngày bắt đầu (YYYY-MM-DD):")  # Change label text
+task_start_date_label = customtkinter.CTkLabel(master=task_form_frame, text="Ngày bắt đầu (YYYY-MM-DD):")
 task_start_date_label.pack()
 
-task_start_date_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)  # Increase the width of the entry
+task_start_date_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)
 task_start_date_entry.pack(pady=5)
 
-task_end_date_label = customtkinter.CTkLabel(master=task_form_frame, text="Ngày kết thúc (YYYY-MM-DD):")  # Add new label
+task_end_date_label = customtkinter.CTkLabel(master=task_form_frame, text="Ngày kết thúc (YYYY-MM-DD):")
 task_end_date_label.pack()
 
-task_end_date_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)  # Increase the width of the entry
+task_end_date_entry = customtkinter.CTkEntry(master=task_form_frame, width=300)
 task_end_date_entry.pack(pady=5)
 
 save_button = customtkinter.CTkButton(master=task_form_frame, text="Lưu công việc", command=save_task)
 save_button.pack(pady=10)
 
-
 # --------------------- Danh sách công việc ---------------------
-# hiển thị danh sách công việc từ bảng task_list
+tree = ttk.Treeview(tab_menu.tab("     Danh sách công việc     "))
+tree.pack(expand=True, fill='both', padx=10, pady=10, ipadx=100, ipady=100)
 
-# chưa build xong
+style = ttk.Style()
+tree["columns"] = ("Title", "Content", "Creator", "Start Time", "End Time")
+style.configure("Treeview.Heading", font=("Arial", 15, "bold"))
 
+# Format the columns
+tree.column("#0", width=0, stretch="no")
+tree.column("Title", width=100)
+tree.column("Content", width=200)
+tree.column("Creator", width=100)
+tree.column("Start Time", width=100)
+tree.column("End Time", width=100)
+
+# Create the column headings
+tree.heading("#0", text="", anchor="w")
+tree.heading("Title", text="Title", anchor="w")
+tree.heading("Content", text="Content", anchor="w")
+tree.heading("Creator", text="Creator", anchor="w")
+tree.heading("Start Time", text="Start Time", anchor="w")
+tree.heading("End Time", text="End Time", anchor="w")
+
+try:
+    conn = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="to_do_list"
+    )
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT task_title, task_content, creator_name, start_time, end_time FROM task_list")
+    task_data = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    for task in task_data:
+        tree.insert("", "end", values=task)
+
+except mysql.connector.Error as err:
+    mbox.showerror("Lỗi", f"Lỗi khi truy xuất danh sách công việc: {err}")
 
 app.mainloop()
- 
